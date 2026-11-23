@@ -3,6 +3,8 @@ from flask import Flask, jsonify, render_template, request
 from werkzeug.exceptions import RequestEntityTooLarge
 from .faults import DockFault
 from .modules.certificate.routes import certificate
+from .modules.dispatch.routes import dispatch
+from .modules.dispatch.storage import Dockets
 from .modules.history.routes import history
 from .modules.history.storage import Receipts
 from .web import board
@@ -12,10 +14,13 @@ def build(path=None):
     service = Flask(__name__)
     service.url_map.redirect_defaults = False
     service.config['MAX_CONTENT_LENGTH'] = 2_000_000
-    service.extensions['ice_receipts'] = Receipts(path or os.environ.get('ICE_STOCK_DB', 'var/receipts.sqlite3'))
+    db_path = path or os.environ.get('ICE_STOCK_DB', 'var/receipts.sqlite3')
+    service.extensions['ice_receipts'] = Receipts(db_path)
+    service.extensions['ice_dockets'] = Dockets(db_path)
     service.register_blueprint(board)
     service.register_blueprint(history)
     service.register_blueprint(certificate)
+    service.register_blueprint(dispatch)
 
     @service.get('/health')
     def health():

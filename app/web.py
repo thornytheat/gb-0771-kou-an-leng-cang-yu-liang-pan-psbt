@@ -1,7 +1,8 @@
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request
 from .faults import DockFault
-from .labels import TABS, CODES, KINDS
+from .labels import TABS, CODES, KINDS, DISPATCH_VERDICTS
 from .modules.certificate.service import issue
+from .modules.dispatch.service import board_view, open_docket
 from .modules.history.routes import receipts
 from .parcels import load_example, receive_pack
 from .pipeline import review
@@ -9,6 +10,10 @@ from .swimlanes import lanes, minutes
 from .utc import iso
 
 board = Blueprint('board', __name__)
+
+
+def dockets():
+    return current_app.extensions['ice_dockets']
 
 
 def selection():
@@ -45,6 +50,15 @@ def page(view):
     if view == 'certificate' and stamp:
         issue(receipts().read(stamp['id']))
     tracks, ticks = lanes(stages)
+    dispatch_board = None
+    if view == 'dispatch':
+        if not stamp:
+            raise DockFault('NO_RECEIPT', '先归档本班原件再开台放行', 404)
+        docket, document = open_docket(receipts(), dockets(), stamp['id'])
+        dispatch_board = board_view(document if docket['current_id'] == stamp['id']
+                                    else receipts().read(docket['current_id']), docket)
     return render_template('station.html', stages=stages, view=view, stamp=stamp, sample=example, tabs=TABS,
-                           codes=CODES, kinds=KINDS, tracks=tracks, ticks=ticks, utc=iso, minutes=minutes,
+                           codes=CODES, kinds=KINDS, dispatch_verdicts=DISPATCH_VERDICTS,
+                           dispatch_board=dispatch_board,
+                           tracks=tracks, ticks=ticks, utc=iso, minutes=minutes,
                            entries=receipts().list() if view == 'history' else [])

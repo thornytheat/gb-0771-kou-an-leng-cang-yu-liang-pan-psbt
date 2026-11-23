@@ -11,6 +11,7 @@
 | M5 件数和占位对账 | 核对时间与收盘库存守恒 | `/view/capacity` `/api/observe/capacity` | `app/modules/capacity/service.py` | `tests/test_capacity.py` |
 | M6 批次留档复跑 | 归档原件并复算 | `/view/history` `POST /api/receipts` | `app/modules/history/service.py` `app/modules/history/storage.py` | `tests/test_history.py` |
 | M7 冷库证据签发 | 校验摘要并下载原件及依据 | `/view/certificate` `/api/certificate/<key>/export` | `app/modules/certificate/service.py` | `tests/test_certificate.py` |
+| M8 放行核对与出库留档 | 逐批判定能否装车、确认放行、迟到证据重判 | `/view/dispatch` `/api/dispatch/<id>/confirm` `/api/dispatch/<id>/reevaluate` | `app/modules/dispatch/service.py` `app/modules/dispatch/storage.py` | `tests/test_dispatch.py` |
 
 ## 陷阱登记
 
@@ -29,3 +30,9 @@
 ## 勾稽与范围
 
 收盘 27 件 = 4 普通占用 + 4 查验冻结 + 19 空余。230 货批分钟 = 135 闭门 + 30 超限 + 43 温度合格 + 7 缺温 + 15 缺槽位。固定门区阈值，货批整批搬移，窗口最长七天。
+
+## M8 放行核对规则
+
+- 放行台只列收盘仍在库的货批（`custody.states`），已 `OUT` 货批不进入待放行。判定优先级为查验冻结（有 ticket）> 已确认开门超温（暴露秒含 `warm`）> 待补证（含 `missing_slot`/`missing_door`/`missing_temp`）> 可放行。只有 `ok` 货批的装车勾选框可用，冻结与超温货批服务端二次拦截。
+- 放行单内容寻址：单号 `R` + 摘要（归档号、货批清单）。决定行与出库 `OUT` 事件在同一 SQLite 事务写入 `release_orders`，靠 `INSERT OR IGNORE` 保证整单重试与并发只产生一张单、一次出库；夹带已离库货批返回 409。
+- 迟到证据经 `/reevaluate` 复算后另存为新归档，台账 `current_id` 指向最新归档，待放行货按新证据重判；已离库货批保留原决定并在台上标 `released`，新证据补出超温时把货批号写入 `flags` 显示「待追查」，标记持续保留。

@@ -1,0 +1,50 @@
+<div class="bar-head"><h2>放行核对</h2>
+<span>台账 {{ dispatch_board.docket.receipt_id[:14] }} · 依据 {{ dispatch_board.docket.current_id[:14] }}</span></div>
+<div class="dispatch-kpis">
+{% for key,label in [('ok','可放行'),('pending','待补证'),('warm','超温禁放'),('frozen','冻结禁放')] %}
+<div class="dk {{ key }}"><span>{{ label }}</span><strong>{{ dispatch_board.counts[key] }}</strong></div>{% endfor %}
+</div>
+<form id="dispatch-form" data-receipt="{{ stamp.id }}">
+<div class="scroll dispatch-table"><table>
+<thead><tr><th>装车</th><th>货批</th><th>件数</th><th>槽位</th><th>判定</th><th>依据</th><th>状态</th></tr></thead><tbody>
+{% for row in dispatch_board.rows %}
+<tr class="verdict-{{ row.verdict }}">
+<td>{% if row.verdict == 'ok' %}<input type="checkbox" name="lots" value="{{ row.lot }}" {% if row.released %}disabled{% endif %}>{% else %}<input type="checkbox" disabled>{% endif %}</td>
+<td><b>{{ row.lot }}</b></td>
+<td class="num">{{ row.pieces }}</td>
+<td>{{ row.slot }}{% if row.ticket %} · {{ row.ticket }}{% endif %}</td>
+<td><span class="tag {{ row.verdict }}">{{ dispatch_verdicts[row.verdict] }}</span></td>
+<td class="reason">{{ row.reason }}{% if row.warm_seconds %} · 超限 {{ minutes(row.warm_seconds) }} 分{% endif %}</td>
+<td>{% if row.released %}<span class="released">已离库 · 单 {{ row.order_id[:8] }} · {{ row.decided_at[11:19] }} UTC</span>
+{% if row.investigate %}<span class="trace">待追查</span>{% endif %}{% else %}待放行{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+<div class="dispatch-actions">
+<button type="submit" id="confirm-release" class="primary">确认放行并出库留档</button>
+<button type="button" id="reevaluate-btn">迟到证据补齐后重新判定</button>
+<span id="dispatch-status" role="status"></span>
+</div>
+<div id="reevaluate-panel" hidden>
+<h3>补齐原件重新判定</h3>
+<p class="desk-note">贴入含 moves、slots、doors、temperatures、lots、window 六字段的 JSON；或选择样例。已离库货批保留原决定，补出超温自动标待追查。</p>
+<select id="reevaluate-sample">
+<option value="">自定义原件（下方 JSON）</option>
+<option value="dirty">港区临检 · 脏样例</option>
+<option value="clean">常规入库 · 净样例</option>
+</select>
+<textarea id="reevaluate-pack" rows="6" placeholder='{"moves":"event,lot,...","slots":"...","doors":"...","temperatures":"...","lots":"...","window":"{\"from\":...}"}'></textarea>
+<div><button type="button" id="reevaluate-submit">提交重判</button>
+<button type="button" id="reevaluate-cancel">取消</button></div>
+</div>
+</form>
+<div class="orders-archive">
+<h3>放行留档（决定与出库同事务）</h3>
+{% for order in dispatch_board.orders %}
+<details><summary>放行单 {{ order.id[:14] }} · {{ order.decided_at[11:19] }} UTC · {{ order.lines|length }} 批</summary>
+<table><thead><tr><th>货批</th><th>决定</th><th>件数</th><th>出库事件</th><th>出库时刻 UTC</th></tr></thead><tbody>
+{% for line in order.lines %}<tr><td>{{ line.lot }}</td><td>{{ line.decision }}</td><td class="num">{{ line.pieces }}</td>
+<td>{{ order.id }}</td><td>{{ line.decided_at[11:19] }}</td></tr>{% endfor %}
+</tbody></table></details>
+{% else %}<p class="desk-note">尚无放行单。放行后决定与出库一并留档，重试不会重复出库。</p>{% endfor %}
+</div>

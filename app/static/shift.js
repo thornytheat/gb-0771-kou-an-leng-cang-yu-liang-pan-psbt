@@ -1,4 +1,5 @@
 import {selectLot} from './tracks.js';
+import './dispatch.js';
 selectLot();
 const dataset = document.querySelector('#dataset');
 const status = document.querySelector('#status');
